@@ -1,0 +1,28 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+
+enum Role { STUDENT COLLEGE COMPANY ACADEMY MENTOR ADMIN }
+enum SkillStatus { SELF_DECLARED ASSESSED DEMONSTRATED }
+enum AttemptStatus { IN_PROGRESS SUBMITTED PASSED FAILED EXPIRED CANCELLED UNDER_REVIEW }
+enum SubmissionStatus { DRAFT SUBMITTED UNDER_REVIEW EVALUATED PASSED NEEDS_IMPROVEMENT REJECTED }
+enum IntegrityEventType { TAB_SWITCH WINDOW_BLUR COPY_ATTEMPT PASTE_ATTEMPT FULLSCREEN_EXIT TIME_ANOMALY CONCURRENT_ATTEMPT }
+
+model User {
+ id String @id @default(cuid()); email String @unique; passwordHash String; name String; role Role @default(STUDENT); createdAt DateTime @default(now()); student StudentProfile?; company Company?; mentor Mentor?; auditLogs AuditLog[]
+}
+model StudentProfile { id String @id @default(cuid()); userId String @unique; user User @relation(fields:[userId],references:[id],onDelete:Cascade); headline String?; targetRole String?; location String?; skills StudentSkill[]; attempts AssessmentAttempt[]; evidence Evidence[]; applications Application[]; simulationSubmissions SimulationSubmission[] }
+model Skill { id String @id @default(cuid()); name String @unique; category String; assessments Assessment[]; studentSkills StudentSkill[]; requirements Requirement[] }
+model StudentSkill { id String @id @default(cuid()); studentId String; skillId String; status SkillStatus @default(SELF_DECLARED); level Int @default(0); lastValidatedAt DateTime?; student StudentProfile @relation(fields:[studentId],references:[id],onDelete:Cascade); skill Skill @relation(fields:[skillId],references:[id],onDelete:Cascade); @@unique([studentId,skillId]) }
+model Assessment { id String @id @default(cuid()); title String; skillId String; level Int; durationMinutes Int @default(20); passPercent Int @default(60); maxAttempts Int @default(3); cooldownHours Int @default(24); published Boolean @default(true); skill Skill @relation(fields:[skillId],references:[id]); questions Question[]; attempts AssessmentAttempt[]; @@unique([skillId,level]) }
+model Question { id String @id @default(cuid()); assessmentId String; prompt String; options Json; correctIndex Int; explanation String; difficulty String @default("FOUNDATION"); assessment Assessment @relation(fields:[assessmentId],references:[id],onDelete:Cascade) }
+model AssessmentAttempt { id String @id @default(cuid()); assessmentId String; studentId String; status AttemptStatus @default(IN_PROGRESS); startedAt DateTime @default(now()); submittedAt DateTime?; score Float?; answers Json?; assessment Assessment @relation(fields:[assessmentId],references:[id]); student StudentProfile @relation(fields:[studentId],references:[id]); integrityEvents IntegrityEvent[] }
+model IntegrityEvent { id String @id @default(cuid()); attemptId String; type IntegrityEventType; severity Int @default(1); metadata Json?; createdAt DateTime @default(now()); attempt AssessmentAttempt @relation(fields:[attemptId],references:[id],onDelete:Cascade) }
+model Simulation { id String @id @default(cuid()); title String; role String; description String; difficulty String; requirements Requirement[]; submissions SimulationSubmission[] }
+model Requirement { id String @id @default(cuid()); skillId String; minLevel Int; simulationId String?; opportunityId String?; skill Skill @relation(fields:[skillId],references:[id]); simulation Simulation? @relation(fields:[simulationId],references:[id]); opportunity Opportunity? @relation(fields:[opportunityId],references:[id]); @@index([simulationId]); @@index([opportunityId]) }
+model SimulationSubmission { id String @id @default(cuid()); simulationId String; studentId String; repositoryUrl String?; demoUrl String?; notes String?; status SubmissionStatus @default(DRAFT); createdAt DateTime @default(now()); simulation Simulation @relation(fields:[simulationId],references:[id]); student StudentProfile @relation(fields:[studentId],references:[id]) }
+model Evidence { id String @id @default(cuid()); studentId String; type String; title String; url String?; description String?; verified Boolean @default(false); createdAt DateTime @default(now()); student StudentProfile @relation(fields:[studentId],references:[id]) }
+model Company { id String @id @default(cuid()); userId String @unique; name String; industry String; verified Boolean @default(false); user User @relation(fields:[userId],references:[id]); opportunities Opportunity[] }
+model Opportunity { id String @id @default(cuid()); companyId String; title String; role String; description String; location String; mode String; deadline DateTime; active Boolean @default(true); company Company @relation(fields:[companyId],references:[id]); requirements Requirement[]; applications Application[] }
+model Application { id String @id @default(cuid()); opportunityId String; studentId String; status String @default("APPLIED"); createdAt DateTime @default(now()); opportunity Opportunity @relation(fields:[opportunityId],references:[id]); student StudentProfile @relation(fields:[studentId],references:[id]); @@unique([opportunityId,studentId]) }
+model Mentor { id String @id @default(cuid()); userId String @unique; expertise String[]; capacity Int @default(8); available Boolean @default(true); user User @relation(fields:[userId],references:[id]) }
+model AuditLog { id String @id @default(cuid()); userId String?; action String; entity String; entityId String?; metadata Json?; createdAt DateTime @default(now()); user User? @relation(fields:[userId],references:[id]); @@index([createdAt]) }
